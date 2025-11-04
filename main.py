@@ -5,9 +5,9 @@
 from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
 import os
 import uuid
-from pathlib import Path
 from pydub import AudioSegment
 from TTS.api import TTS
 
@@ -23,7 +23,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# مجلد التخزين
+# مجلدات التخزين
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 OUTPUT_DIR = BASE_DIR / "outputs"
@@ -33,9 +33,18 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 # ذاكرة مؤقتة للأصوات المسجّلة
 voices = {}
 
-# تحميل نموذج Coqui XTTS (يدعم العربية)
+# اسم النموذج
 MODEL_NAME = "tts_models/multilingual/multi-dataset/xtts_v2"
-tts = TTS(model_name=MODEL_NAME, progress_bar=False, gpu=False)
+
+# متغيّر عالمي للنموذج (سيتم تحميله عند أول طلب)
+tts = None
+
+def get_tts():
+    """تحميل نموذج TTS عند أول استخدام فقط (Lazy loading)."""
+    global tts
+    if tts is None:
+        tts = TTS(model_name=MODEL_NAME, progress_bar=False, gpu=False)
+    return tts
 
 
 @app.get("/")
@@ -75,12 +84,15 @@ async def generate_tts(voice_id: str = Form(...), text: str = Form(...)):
     voice_ref = voices[voice_id]["path"]
     output_path = OUTPUT_DIR / f"{uuid.uuid4()}.wav"
 
+    # الحصول على النموذج (يتم تحميله أول مرة فقط)
+    tts_model = get_tts()
+
     # توليد الصوت
-    tts.tts_to_file(
+    tts_model.tts_to_file(
         text=text,
         speaker_wav=voice_ref,
         language="ar",
-        file_path=output_path
+        file_path=output_path,
     )
 
     return FileResponse(output_path, media_type="audio/wav", filename="output.wav")
