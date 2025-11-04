@@ -1,7 +1,3 @@
 fastapi
-uvicorn
+uvicorn[standard]
 pydub
-TTS
-torch
-numpy
-scipy
